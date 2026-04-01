@@ -186,14 +186,38 @@ def load_template_data():
 def get_deadline_status(deadline_date):
     """Determine deadline status based on days remaining"""
     today = datetime.now().date()
-    deadline = pd.to_datetime(deadline_date).date() if isinstance(deadline_date, str) else deadline_date
+
+    if deadline_date is None or (isinstance(deadline_date, str) and deadline_date.strip() == ""):
+        return "No deadline", "grey"
+
+    # Parse text dates safely
+    if isinstance(deadline_date, str):
+        try:
+            deadline = datetime.strptime(deadline_date, "%Y-%m-%d").date()
+        except ValueError:
+            try:
+                parsed = pd.to_datetime(deadline_date, errors="coerce")
+                if pd.isna(parsed):
+                    return "Invalid deadline", "grey"
+                deadline = parsed.date()
+            except Exception:
+                return "Invalid deadline", "grey"
+    elif isinstance(deadline_date, datetime):
+        deadline = deadline_date.date()
+    elif isinstance(deadline_date, date):
+        deadline = deadline_date
+    else:
+        return "Invalid deadline", "grey"
+
     days_remaining = (deadline - today).days
-    
+
     if days_remaining < 0:
         return DeadlineStatus.OVERDUE.value, ALERT_RED
-    elif days_remaining < 7:
+    elif days_remaining == 0:
+        return "Due today", WARNING_ORANGE
+    elif days_remaining <= 7:
         return DeadlineStatus.CRITICAL.value, WARNING_ORANGE
-    elif days_remaining < 14:
+    elif days_remaining <= 14:
         return DeadlineStatus.WARNING.value, "#FFA500"
     else:
         return DeadlineStatus.ON_TRACK.value, SUCCESS_GREEN
@@ -293,8 +317,12 @@ def deadline_dashboard(data):
         service_filter = st.multiselect("Service Type", options=deadlines['service_type'].unique(), default=deadlines['service_type'].unique(), key="deadline_service")
     
     with col3:
-        status_filter = st.multiselect("Status", options=['Overdue', 'Critical (< 7 days)', 'Warning (< 14 days)', 'On Track'], 
-                                       default=['Overdue', 'Critical (< 7 days)', 'Warning (< 14 days)'], key="deadline_status")
+        status_filter = st.multiselect(
+            "Status",
+            options=['Overdue', 'Due today', 'Critical (< 7 days)', 'Warning (< 14 days)', 'On Track', 'No deadline', 'Invalid deadline'],
+            default=['Overdue', 'Due today', 'Critical (< 7 days)', 'Warning (< 14 days)', 'On Track'],
+            key="deadline_status"
+        )
     
     # Apply filters
     filtered_deadlines = deadlines[
