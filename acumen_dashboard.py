@@ -222,6 +222,32 @@ def get_deadline_status(deadline_date):
     else:
         return DeadlineStatus.ON_TRACK.value, SUCCESS_GREEN
 
+def calculate_days_remaining(deadline):
+    """Calculate days remaining until deadline, handling multiple date formats safely"""
+    from datetime import date
+    today = date.today()
+    
+    if deadline is None or (isinstance(deadline, str) and deadline.strip() == ""):
+        return None
+    
+    if isinstance(deadline, str):
+        try:
+            deadline = datetime.strptime(deadline, "%Y-%m-%d").date()
+        except ValueError:
+            try:
+                parsed = pd.to_datetime(deadline, errors="coerce")
+                if pd.isna(parsed):
+                    return None
+                deadline = parsed.date()
+            except Exception:
+                return None
+    elif isinstance(deadline, datetime):
+        deadline = deadline.date()
+    elif not isinstance(deadline, date):
+        return None
+    
+    return (deadline - today).days
+
 # ============================================================================
 # AUTHENTICATION & ACCESS CONTROL
 # ============================================================================
@@ -294,7 +320,8 @@ def deadline_dashboard(data):
     
     deadlines = data['deadlines'].copy()
     deadlines['deadline_date'] = pd.to_datetime(deadlines['deadline_date'])
-    deadlines['days_remaining'] = (deadlines['deadline_date'] - datetime.now()).dt.days
+    # Use robust days_remaining calculation
+    deadlines['days_remaining'] = deadlines['deadline_date'].apply(calculate_days_remaining)
     
     # Add status column
     deadline_statuses = []
