@@ -372,7 +372,8 @@ def deadline_dashboard(data):
             with col3:
                 st.markdown(f"📅 {row['deadline_date'].strftime('%d %b %Y')}")
             with col4:
-                st.markdown(f"⏱️ {row['days_remaining']} days")
+                days_text = f"{row['days_remaining']} days" if row['days_remaining'] is not None else "N/A"
+                st.markdown(f"⏱️ {days_text}")
             with col5:
                 badge_color = ALERT_RED if row['deadline_status'] == 'Overdue' else WARNING_ORANGE
                 st.markdown(f"<span style='background-color: {badge_color}; color: white; padding: 5px 10px; border-radius: 4px; font-size: 12px;'>{row['deadline_status']}</span>", unsafe_allow_html=True)
