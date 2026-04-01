@@ -1,0 +1,7 @@
+﻿"task_id,client_id,task_description,assigned_to,status,hours_estimated,hours_actual,due_date"
+"T001,C001,Monthly bookkeeping review,Staff Name 1,Completed,8,7,2024-01-17"
+"T002,C002,Quarterly audit fieldwork,Staff Name 2,In Progress,40,32,2024-02-15"
+"T003,C003,Payroll processing & filing,Staff Name 4,In Progress,6,6,2024-02-05"
+"T004,C001,Annual tax return prep,Staff Name 1,Pending,20,0,2024-02-28"
+"T005,C004,Secretarial AGM setup,Staff Name 6,In Progress,5,6,2024-02-10"
+"T006,C005,Mid-year financial advisory,Staff Name 7,Completed,12,13,2024-01-18"

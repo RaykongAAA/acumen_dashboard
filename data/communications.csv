@@ -1,0 +1,6 @@
+﻿"comm_id,client_id,client_name,communication_type,subject,date,notes"
+"CM001,C001,Client Name 1,Email,Monthly report delivered,2024-01-19,Client satisfied with reporting"
+"CM002,C002,Client Name 2,Meeting,Audit planning session,2024-01-17,Planning Q1 audit procedures"
+"CM003,C003,Client Name 3,Phone Call,Payroll discrepancy discussion,2024-01-15,Resolved - payroll corrected"
+"CM004,C001,Client Name 1,Email,Year-end planning,2024-01-10,Discussed 2024 tax strategy"
+"CM005,C004,Client Name 4,Meeting,Service review,2024-01-07,Client discussed expanding services"

@@ -1,0 +1,4 @@
+﻿"client_id,client_name,country,entity,main_contact,email,services,status,annual_revenue,last_contact_date"
+"C001,Client A,Malaysia,AAASB,John Tan,john@clienta.com,Bookkeeping;Tax,Active,50000,2024-01-20"
+"C002,Client B,Singapore,AAAPL,Rajesh Kumar,raj@clientb.com,Audit;Tax,Active,100000,2024-01-19"
+"C003,Client C,Malaysia,ACSSB,Susan Wong,susan@clientc.com,Payroll,At Risk,30000,2024-01-10"
