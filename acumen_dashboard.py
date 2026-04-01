@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -315,123 +315,177 @@ def show_header():
     st.divider()
 
 def deadline_dashboard(data):
-    """Deadline Management Dashboard"""
+    """
+    Unified deadline dashboard with:
+    - Comprehensive deadline parsing and validation
+    - Summary counters with emoji indicators
+    - Data quality tracking and CSV export
+    - Multiple visualization (bar + pie charts)
+    - Filter options and colored status display
+    """
     st.markdown(f"<h2 style='color: {TRUST_BLUE}'>⏰ Deadline Management</h2>", unsafe_allow_html=True)
     
     deadlines = data['deadlines'].copy()
-    deadlines['deadline_date'] = pd.to_datetime(deadlines['deadline_date'])
-    # Use robust days_remaining calculation
-    deadlines['days_remaining'] = deadlines['deadline_date'].apply(calculate_days_remaining)
     
-    # Add status column
-    deadline_statuses = []
-    colors = []
-    for deadline in deadlines['deadline_date']:
-        status, color = get_deadline_status(deadline)
-        deadline_statuses.append(status)
-        colors.append(color)
+    results = []
+    skipped = []
+    today = date.today()
     
-    deadlines['deadline_status'] = deadline_statuses
-    deadlines['color'] = colors
+    # Process each deadline record
+    for idx, row in deadlines.iterrows():
+        deadline_value = row.get('deadline_date')
+        task_name = f"{row.get('client_name', 'Unknown')} - {row.get('service_type', 'Unknown Task')}"
+        
+        # Normalize deadline and calculate days remaining
+        days_remaining = None
+        if deadline_value is None or (isinstance(deadline_value, str) and deadline_value.strip() == ""):
+            status, color = "No deadline", "grey"
+        else:
+            try:
+                if isinstance(deadline_value, str):
+                    try:
+                        deadline_date = datetime.strptime(deadline_value, "%Y-%m-%d").date()
+                    except ValueError:
+                        deadline_date = pd.to_datetime(deadline_value).date()
+                elif isinstance(deadline_value, datetime):
+                    deadline_date = deadline_value.date()
+                else:
+                    deadline_date = deadline_value
+                
+                if isinstance(deadline_date, date):
+                    days_remaining = (deadline_date - today).days
+                    if days_remaining < 0:
+                        status, color = "Overdue", "red"
+                    elif days_remaining == 0:
+                        status, color = "Due today", "orange"
+                    elif days_remaining <= 7:
+                        status, color = f"{days_remaining} days left", "yellow"
+                    else:
+                        status, color = f"{days_remaining} days left", "green"
+                else:
+                    status, color = "Invalid deadline", "grey"
+            except Exception:
+                status, color = "Invalid deadline", "grey"
+        
+        # Collect results or skipped records
+        if status in ["Invalid deadline", "No deadline"]:
+            skipped.append({
+                "Task": task_name,
+                "Client": row.get('client_name', 'N/A'),
+                "Service": row.get('service_type', 'N/A'),
+                "Deadline": str(deadline_value),
+                "Issue": status
+            })
+        else:
+            results.append({
+                "task": task_name,
+                "client": row.get('client_name', 'Unknown'),
+                "service": row.get('service_type', 'Unknown'),
+                "deadline": str(deadline_date) if 'deadline_date' in locals() else str(deadline_value),
+                "days_remaining": days_remaining,
+                "status": status,
+                "color": color,
+                "country": row.get('country', 'Unknown'),
+                "assigned_staff": row.get('assigned_staff', 'Unassigned')
+            })
+    
+    # Summary counters
+    overdue_count = sum(1 for r in results if r["status"] == "Overdue")
+    today_count = sum(1 for r in results if r["status"] == "Due today")
+    soon_count = sum(1 for r in results if "days left" in r["status"] and r["days_remaining"] is not None and r["days_remaining"] <= 7)
+    other_count = len(results) - (overdue_count + today_count + soon_count)
+    
+    st.subheader("📊 Summary Snapshot")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("🔴 Overdue", overdue_count)
+    with col2:
+        st.metric("🟠 Due today", today_count)
+    with col3:
+        st.metric("🟡 Due within 7 days", soon_count)
+    with col4:
+        st.metric("🟢 On track & later", other_count)
+    
+    st.divider()
+    
+    # Charts
+    st.subheader("📈 Deadline Distribution")
+    summary_df = pd.DataFrame({
+        "Category": ["Overdue", "Due today", "Due within 7 days", "On track"],
+        "Count": [overdue_count, today_count, soon_count, other_count]
+    })
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.bar_chart(summary_df.set_index("Category"))
+    
+    with col2:
+        fig = px.pie(
+            summary_df,
+            values="Count",
+            names="Category",
+            title="Deadline Overview",
+            color_discrete_map={
+                "Overdue": "red",
+                "Due today": "orange",
+                "Due within 7 days": "yellow",
+                "On track": "green"
+            }
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    st.divider()
     
     # Filter options
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        country_filter = st.multiselect("Country", options=['Malaysia', 'Singapore', 'Both'], default=['Both'], key="deadline_country")
-    
-    with col2:
-        service_filter = st.multiselect("Service Type", options=deadlines['service_type'].unique(), default=deadlines['service_type'].unique(), key="deadline_service")
-    
-    with col3:
-        status_filter = st.multiselect(
-            "Status",
-            options=['Overdue', 'Due today', 'Critical (< 7 days)', 'Warning (< 14 days)', 'On Track', 'No deadline', 'Invalid deadline'],
-            default=['Overdue', 'Due today', 'Critical (< 7 days)', 'Warning (< 14 days)', 'On Track'],
-            key="deadline_status"
-        )
-    
-    # Apply filters
-    filtered_deadlines = deadlines[
-        (deadlines['country'].isin(country_filter) if 'Both' not in country_filter else True) &
-        (deadlines['service_type'].isin(service_filter)) &
-        (deadlines['deadline_status'].isin(status_filter))
-    ]
-    
-    # Display critical deadlines (Overdue + Critical)
-    critical = filtered_deadlines[filtered_deadlines['deadline_status'].isin(['Overdue', 'Critical (< 7 days)'])]
-    
-    if len(critical) > 0:
-        st.markdown("### 🚨 Critical & Overdue Deadlines")
-        for idx, row in critical.iterrows():
-            col1, col2, col3, col4, col5 = st.columns([2, 2, 1.5, 1.5, 1])
-            with col1:
-                st.markdown(f"**{row['client_name']}**")
-            with col2:
-                st.markdown(f"{row['service_type']}")
-            with col3:
-                st.markdown(f"📅 {row['deadline_date'].strftime('%d %b %Y')}")
-            with col4:
-                days_text = f"{row['days_remaining']} days" if row['days_remaining'] is not None else "N/A"
-                st.markdown(f"⏱️ {days_text}")
-            with col5:
-                badge_color = ALERT_RED if row['deadline_status'] == 'Overdue' else WARNING_ORANGE
-                st.markdown(f"<span style='background-color: {badge_color}; color: white; padding: 5px 10px; border-radius: 4px; font-size: 12px;'>{row['deadline_status']}</span>", unsafe_allow_html=True)
-        st.divider()
-    
-    # Deadline timeline chart
-    st.markdown("### 📈 Deadline Timeline")
-    
-    # Sort by deadline date
-    timeline_data = filtered_deadlines.sort_values('deadline_date').head(15)
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Scatter(
-        x=timeline_data['deadline_date'],
-        y=timeline_data['client_name'],
-        mode='markers+text',
-        marker=dict(
-            size=12,
-            color=timeline_data['color'],
-            line=dict(width=2, color='white')
-        ),
-        text=timeline_data['service_type'],
-        textposition='top center',
-        hovertemplate='<b>%{y}</b><br>%{text}<br>Due: %{x|%d %b %Y}<extra></extra>'
-    ))
-    
-    fig.update_layout(
-        title="Upcoming Deadlines (Next 15)",
-        xaxis_title="Deadline Date",
-        yaxis_title="Client",
-        height=400,
-        template="plotly_white",
-        hovermode='closest',
-        xaxis=dict(gridcolor='#f0f0f0'),
-        yaxis=dict(gridcolor='#f0f0f0')
+    st.subheader("🔍 Active Deadlines")
+    filter_choice = st.radio(
+        "Filter tasks:",
+        options=["All", "Overdue", "Due today", "Due within 7 days"],
+        horizontal=True
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    if filter_choice == "All":
+        filtered = results
+    elif filter_choice == "Overdue":
+        filtered = [r for r in results if r["status"] == "Overdue"]
+    elif filter_choice == "Due today":
+        filtered = [r for r in results if r["status"] == "Due today"]
+    elif filter_choice == "Due within 7 days":
+        filtered = [r for r in results if "days left" in r["status"] and r["days_remaining"] is not None and r["days_remaining"] <= 7]
+    else:
+        filtered = results
     
-    # Deadline summary statistics
-    col1, col2, col3, col4 = st.columns(4)
+    # Display filtered results
+    if len(filtered) > 0:
+        for r in filtered:
+            days_info = f"{r['days_remaining']} days left" if r['days_remaining'] is not None else "N/A"
+            st.markdown(
+                f"<span style='color:{r['color']}; font-weight: bold;'>"
+                f"● {r['task']}</span><br>"
+                f"<span style='font-size: 12px; color: #666;'>"
+                f"Staff: {r['assigned_staff']} | {days_info} | {r['deadline']}"
+                f"</span>",
+                unsafe_allow_html=True
+            )
+            st.divider()
+    else:
+        st.info(f"No deadlines match filter: {filter_choice}")
     
-    with col1:
-        overdue_count = len(filtered_deadlines[filtered_deadlines['deadline_status'] == 'Overdue'])
-        st.metric("Overdue", overdue_count, delta=None, delta_color="inverse")
+    st.divider()
     
-    with col2:
-        critical_count = len(filtered_deadlines[filtered_deadlines['deadline_status'] == 'Critical (< 7 days)'])
-        st.metric("Critical (< 7 days)", critical_count, delta=None, delta_color="inverse")
-    
-    with col3:
-        warning_count = len(filtered_deadlines[filtered_deadlines['deadline_status'] == 'Warning (< 14 days)'])
-        st.metric("Warning (< 14 days)", warning_count, delta=None)
-    
-    with col4:
-        ontrack_count = len(filtered_deadlines[filtered_deadlines['deadline_status'] == 'On Track'])
-        st.metric("On Track", ontrack_count, delta=None, delta_color="off")
+    # Skipped deadlines with export
+    if skipped:
+        st.subheader("⚠️ Skipped Deadlines (Data Quality Review)")
+        skipped_df = pd.DataFrame(skipped)
+        st.dataframe(skipped_df, use_container_width=True, hide_index=True)
+        
+        csv = skipped_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="⬇️ Download skipped deadlines as CSV",
+            data=csv,
+            file_name="skipped_deadlines.csv",
+            mime="text/csv"
+        )
 
 def staff_performance_dashboard(data):
     """Staff Performance & Workload Dashboard"""
